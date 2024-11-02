@@ -356,7 +356,7 @@ POST /_bulk
 ```
 OR 
 ```
-POST products/_bulk 
+POST index_name/_bulk 
 { "index": { "_id": 200 } }
 { "key1": "value1", "key2": "value2" }
 { "create": { "_id": 201 } }
@@ -365,7 +365,7 @@ POST products/_bulk
 
 ### Update & Delete documents 
 ```
-POST products/_bulk 
+POST index_name/_bulk 
 { "update": { "_id": 200 } }
 { "doc": { "key1": "newValue1" } }
 { "delete": { "_id": 201 } }
@@ -498,7 +498,7 @@ GET /index_name/_search
 
 ###### Search for properties containing "pasta"
 ```
-GET /products/_search
+GET /index_name/_search
 {
     "query":{
         "match":{
@@ -510,7 +510,7 @@ GET /products/_search
 
 ###### Search for properties containing "pasta" | "chicken"
 ```
-GET /products/_search
+GET /index_name/_search
 {
     "query":{
         "match":{
@@ -522,7 +522,7 @@ GET /products/_search
 
 ###### Search for properties containing "pasta" & "chicken"
 ```
-GET /products/_search
+GET /index_name/_search
 {
     "query":{
         "match":{
@@ -600,7 +600,7 @@ GET /index_name/_search
 ```
 
 ##### Specify a tie breaker
-* By default, one field is sued for calculating a document's relavance score 
+* By default, one field is used for calculating a document's relavance score 
 * We can reward documents where multiple fields match with the `tie_breaker` parameter 
     * Each matching field affects the relevance score 
 ```
@@ -757,7 +757,7 @@ GET /index_name/_search
 GET /index_name/_search 
 {
     "query": {
-        "match": {
+        "prefix": {
             "key1.keyword": {
                 "value": "value1"
             }
@@ -768,10 +768,10 @@ GET /index_name/_search
 
 ##### Example
 ```
-GET /products/_search 
+GET /index_name/_search 
 {
     "query": {
-        "match": {
+        "prefix": {
             "name.keyword": {
                 "value": "Past"
             }
@@ -790,29 +790,29 @@ GET /products/_search
 
 #### Wildcards
 ```
-GET /products/_search 
+GET /index_name/_search 
 {
     "query": {
         "match": {
-            "key1.keyword": {
-                "value": "value1?"
-            }
+            "key1.keyword": "value1?"
         }
     }
 }
+
+#value1 must be lower-case
 ```
-OR 
+###### OR 
 ```
-GET /products/_search 
+GET /index_name/_search 
 {
     "query": {
         "match": {
-            "key1.keyword": {
-                "value": "value1*"
-            }
+            "key1.keyword": "value1*"
         }
     }
 }
+
+#value1 must be lower-case
 ```
 
 ##### Example 
@@ -836,13 +836,11 @@ GET /products/_search
 
 #### Regular Expression 
 ```
-GET /products/_search 
+GET /index_name/_search 
 {
     "query": {
-        "match": {
-            "key1.keyword": {
-                "value": "value1[a-zA-Z]+"
-            }
+        "regexp": {
+            "key1.keyword": "value1[a-zA-Z]+"
         }
     }
 }
@@ -860,7 +858,7 @@ GET /products/_search
 
 ### Querying by field existence
 ```
-GET /products/_search 
+GET /index_name/_search 
 {
     "query": {
         "exists": {
@@ -877,7 +875,7 @@ GET /products/_search
     * There are a few other cased where values are not indexed 
 * The _exists_ query can be inverted by using the _bool_ query's _must_not_
     ```
-    GET /products/_search 
+    GET /index_name/_search 
     {
         "query": {
             "bool": {
@@ -890,6 +888,697 @@ GET /products/_search
         }
     }
     ```
+
+### Match Phrase 
+```
+GET /index_name/_search 
+{
+    "query": {
+        "match_phrase": {
+            "field": "value"
+        }
+    }
+}
+```
+
+#### Example 
+
+##### Match phrase query 
+```
+GET /index_name/_search 
+{
+    "query": {
+        "match_phrase": {
+            "desc": "guide to elasticsearch"
+        }
+    }
+}
+```
+
+##### Document #1
+```
+{
+    "description": "Very useful and complete guide! Great introduction to Elasticsearch!"
+}
+
+# Array order 
+["very", "useful", "and", "complete", "guide", "great", "introduction", "to", "elasticsearch"]
+
+# Visualize with search value "guide to elasticsearch"
+__ __ __ __ guide __ __ to elastic 
+ 1  2  3  4   5    6  7  8  9
+
+Match?: NO
+```
+
+##### Document #2
+```
+{
+    "description": "What a great and complete guide to Elasticsearch! Good stuff!"
+}
+
+# Array order 
+["what", "a", "great", "and", "complete", "guide", "to", "elasticsearch", "good", "stuff"]
+
+# Visualize with search value "guide to elasticsearch"
+__ __ __ __ __ guide to elasticsearch __ 
+ 1  2  3  4  5    6  7      8         9   
+
+Match?: YES
+```
+
+##### Documents match
+|    Term   |   Document #1 |   Document #2 |
+|----------:|:-------------:|--------------:|
+| "a"       |               |               | 
+| "and"     |               |               | 
+| "complete"|   X           |   X           |
+| "elasticsearch"   |   X           |   X           |
+| "guide"   |   X           |   X           |
+| "introduction" |   X      |               |
+| "to"      |   X           |   X           |   
+|   ...     |   ...         |   ...         |
+
+### Leaf vs compound queries 
+
+* **Leaf queries** search for values and are independent queries 
+* **Compound queries** wrap other queries _(leaf queries | compound queries)_ to product result
+
+
+#### Leaf queries 
+##### Example for two leaf queries 
+```
+GET /index_name/_search 
+{
+    "query": {
+        "term": {
+            "tags.keyword": "Alcohol"
+        }
+    }
+}
+```
+```
+GET /index_name/_search 
+{
+    "query": {
+        "range": {
+            "in_stock": {
+                "lte": 5
+            }
+        }
+    }
+}
+```
+
+##### Tree data structure in compound queries 
+```
+                             AND 
+                            /   \
+    tags.keyword = "Alcohol"    OR 
+                               /  \
+                     in_stock=0    is_active = false
+```
+##### SQL queries equivalent
+```
+WHERE tag = "Alcohol" AND (in_stock = 0 OR is_active IS FALSE)
+```
+
+#### Compound queries 
+##### 1. Querying with boolean logic 
+```
+GET /index_name/_search 
+{
+    "query": {
+        "bool": {
+            "must": [
+                {
+                    "term": {
+                        "tags.keyword": "Alcohol"
+                    }
+                }
+            ],
+            "must_not": [
+                {
+                    "term": {
+                        "tags.keyword": "Wine"
+                    }
+                }
+            ],
+            "should": [
+                {
+                    "term": {
+                        "tags.keyword": "Alcohol"
+                    }
+                },
+                {
+                    "term": {
+                        "name": "alcohol"
+                    }
+                }
+            ]
+        }
+    }
+}
+```
+
+###### SQL queries equivalent   
+```
+SELECT * 
+FROM index_name 
+WHERE tags = 'Alcohol' 
+AND tags != 'Wine'
+ORDER BY 
+    CASE 
+        WHEN tags = 'Alcohol' THEN 1 
+        WHEN name = 'alcohol' THEN 2 
+        ELSE 3 
+    END;
+```
+
+###### Occurrence types 
+|   Occurrence type     |   Description             |
+|:---------------------:|:--------------------------|
+|   **must**            |   Query clauses are required to match and will contribute to relevance scores. |
+|   **filter**          |   Query clauses are quired to match, but will _not_ contribute to relevance scores. Query clauses may therefore be cached for improved performance. | 
+|   **must_not**        |   Query clauses must _not_ match and do not affect relevance scoring. Query clauses may therefore be cached for improved performance. |
+|   **should**          |   Query clauses _should_ match. Relevance scores of matching documents are boosted for each matching query clause. Behavior can be adjusted with `minimum_should_match`. |
+
+###### Example 1
+```
+#SQL query 
+
+WHERE (tags IN ("Beer") OR name like '%Beer%') AND in_stock <= 100
+```
+```
+# Elasticsearch query (solution 1)
+
+GET /index_name/_search
+{
+    "query": {
+        "bool": {
+            "filter": {
+                "range": {
+                    "in_stock": {
+                        "lte": 100
+                    }
+                }
+            },
+            "must": [
+                {
+                    "bool": {
+                        "should": [
+                            { "term": { "tags.keyword": "Beer" } }
+                            { "match": { "name": "Beer" } }
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}
+```
+```
+# Elasticsearch query (solution 2)
+
+GET /index_name/_search
+{
+    "query": {
+        "bool": {
+            "filter": {
+                "range": {
+                    "in_stock": {
+                        "lte": 100
+                    }
+                }
+            },
+            "should": [
+                { "term": { "tags.keyword": "Beer" } }
+                { "match": { "name": "Beer" } }
+            ],
+            "minimum_should_match": 1
+        }
+    }
+}
+```
+
+###### Example 2
+```
+# SQL query 
+
+WHERE tags IN ("Beer") AND (name LIKE '&Beer&' OR description LIKE '%Beer%') AND in_stock <= 100
+```
+```
+# Elasticsearch query 
+
+GET /index_name/_search 
+{
+    "query": {
+        "bool": {
+          "filter": {
+            "range": {
+              "in_stock": {
+                "lte": 100
+              }
+            },
+            "term": {
+              "tags.keyword": "Beer"
+            }
+          },
+          "must": [
+            { 
+              "multi_match": {
+                "query": "Beer",
+                "fields": ["name", "desc"]
+              } 
+            }
+          ]
+      }
+    }
+}
+```
+
+##### 2. Boosting query
+* The **bool** query can **increase** relevance score with _should_
+* The **boosting** query can **decrease** relevance scores with _negative_
+  * Documents must match the _positive_ query clause 
+  * Documents that match the _negative_ query clause have their relevance scores decreased
+  * Use _match_all_ query for positive if you don't want to filter documents
+
+```
+# I like pasta
+
+GET /index_name/_search 
+{
+    "query": {
+        "must": { "match_all": { } }
+    },
+    "should": {
+        "term": {
+            "name.keyword": "Pasta"
+        }
+    }
+}
+
+```
+```
+# I don't like hotdog
+
+GET /index_name/_search 
+{
+    "query": {
+        "boosting": {
+            "positive": {
+                "match_all": {}
+            },
+            "negative": {
+                "term": {
+                    "name.keyword": "Hotdog"
+                }
+            },
+            "negative_boost": 0.5
+        }
+    }
+}
+
+```
+```
+# I like pasta, but not hotdog
+
+GET /index_name/_search 
+{
+    "query": {
+        "boosting": {
+            "positive": {
+                "bool": {
+                    "must": {
+                        "match_all": {}
+                    },
+                    "should": {
+                        "term": {
+                            "name.keyword": "Pasta"
+                        }
+                    }
+                }
+            },
+            "negative": {
+                "match": {
+                    "name": "hotdog"
+                }
+            },
+            "negative_boost": 0.5
+        }
+    }
+}
+
+```
+
+##### 3. Querying nested objects
+* _Nested object_ is a special type of field that allows for arrays of objects within a document
+* Matching child objects affect the parent document's relevance score 
+* Elasticsearch calculates a relevance score for each matching child object
+* Relevance scoring can be configure with _score_mode_ parameter
+
+###### Example Elastic object (index_name: books)
+```
+{
+  "title": "Harry Potter",
+  "summary": "This is summary for Harry Potter",
+  "is_deleted": false,
+  "is_draft": false,
+  "create_date": "2021-11-02",
+  "update_date": "2021-12-01",
+  
+  # nested object 
+  "book_editions": [
+    {
+      "book_edition_id": 1,
+      "edition_number": 1,
+      "public_year": 1997,
+      "page_count": 223,
+      "language": "en",
+      "convert_image": "cover1.jpg",
+      "publisher": "Bloomsbury Publishing",
+      "isbn": "9780747532699",
+      "is_deleted": false,
+      "create_date": "1997-06-26",
+      "update_date": "1997-06-26"
+    },
+    {
+      "book_edition_id": 2,
+      "edition_number": 2,
+      "public_year": 1998,
+      "page_count": 251,
+      "language": "en",
+      "convert_image": "cover2.jpg",
+      "publisher": "Bloomsbury Publishing",
+      "isbn": "9780747538493",
+      "is_deleted": false,
+      "create_date": "1998-07-02",
+      "update_date": "1998-07-02"
+    },
+    {
+      "book_edition_id": 3,
+      "edition_number": 3,
+      "public_year": 1999,
+      "page_count": 317,
+      "language": "en",
+      "convert_image": "cover3.jpg",
+      "publisher": "Bloomsbury Publishing",
+      "isbn": "9780747542155",
+      "is_deleted": false,
+      "create_date": "1999-07-08",
+      "update_date": "1999-07-08"
+    }
+  ]
+}
+
+```
+
+###### Add mapping for nested object 
+```
+PUT /books
+{
+  "mappings": {
+    "properties": {
+      "title": { 
+        "type": "text", 
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "summary": { 
+        "type": "text", 
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "is_deleted": { "type": "boolean" },
+      "is_draft": { "type": "boolean" },
+      "create_date": { "type": "date" },
+      "update_date": { "type": "date" },
+      "book_editions": {
+        "type": "nested",
+        "properties": {
+          "book_edition_id": { "type": "keyword" },
+          "edition_number": { "type": "integer" },
+          "public_year": { "type": "integer" },
+          "page_count": { "type": "integer" },
+          "language": { "type": "keyword" },
+          "convert_image": { "type": "keyword" },
+          "publisher": { "type": "text" },
+          "isbn": { "type": "keyword" },
+          "is_deleted": { "type": "boolean" },
+          "create_date": { "type": "date" },
+          "update_date": { "type": "date" }
+        }
+      }
+    }
+  }
+}
+```
+
+###### Query nested object
+```
+GET /books/_search
+{
+    "query": {
+        "nested": {
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "match": {
+                                "book_editions.name": "harry potter"
+                            }
+                        },
+                        {
+                            "range": {
+                                "book_editions.page_count": {
+                                    "gte": 200
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}
+```
+
+###### Add nested query to boolean query  
+```
+GET /books/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "multi_match": {
+            "query": "harry potter",
+            "fields": ["title", "summary"]
+          }
+        },
+        {
+          "nested": {
+            "path": "book_editions",
+            "query": {
+              "bool": {
+                "filter": [
+                  {
+                    "range": {
+                      "book_editions.page_count": {
+                        "gt": 300
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "should": [
+        {
+          "match": {
+            "title": "potter"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+###### Adjusting relevance score with _score_mode_
+
+| Scoring Mode | Description                                                              |
+|--------------|--------------------------------------------------------------------------|
+| `avg` (default) | The average relevance score of matching child objects.                  |
+| `min`          | The minimum relevance score of matching child objects.                  |
+| `max`          | The maximum relevance score of matching child objects.                  |
+| `sum`          | The sum of all matching child objects’ relevance scores.                |
+| `none`         | Ignore relevance scores for matching child objects (i.e., set to 0.0). |
+
+##### 4. Nested innter hits 
+* **Nested inner hits** show which _nested object(s)_ match a query 
+* Without **inner hits**, just know that _something_ matched
+* Add **inner_hits** parameter to *nested query* 
+  * Supply **{}** as value for the default Behavior
+  * Information about the matched *nested object(s)* is added to search results 
+  * Use the __offset__ key to find each object's position within **_source**
+  * Customize results with the __name__ and __size__ paramaters
+
+###### Add *inner_hits* inside nested query 
+```
+GET /books/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "nested": {
+            "path": "book_editions",
+            "inner_hits": {}, 
+            "query": {
+              "term": {
+                "book_editions.language": "en"
+              }
+            },
+            "score_mode": "avg"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+###### Search result 
+```
+{
+  "took" : 1,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 1,
+      "relation" : "eq"
+    },
+    "max_score" : 2.2335923,
+    "hits" : [
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "1",
+        "_score" : 2.2335923,
+        "_source" : {
+          "title" : "Harry Potter",
+          "summary" : "This is summary for Harry Potter",
+          "is_deleted" : false,
+          "is_draft" : false,
+          "create_date" : "1990-11-02",
+          "update_date" : "1998-12-01",
+          "book_editions" : [
+            {
+              "book_edition_id" : 1,
+              "edition_number" : 1,
+              "public_year" : 1878,
+              "page_count" : 300,
+              "language" : "vn",
+              "convert_image" : "cover1.jpg",
+              "publisher" : "Publisher 1",
+              "isbn" : "1234567890123",
+              "is_deleted" : false,
+              "create_date" : "2023-01-01",
+              "update_date" : "2023-06-01"
+            },
+            {
+              "book_edition_id" : 2,
+              "edition_number" : 2,
+              "public_year" : 2021,
+              "page_count" : 320,
+              "language" : "en",
+              "convert_image" : "cover2.jpg",
+              "publisher" : "Publisher 2",
+              "isbn" : "1234567890124",
+              "is_deleted" : false,
+              "create_date" : "2023-01-01",
+              "update_date" : "2023-06-01"
+            },
+            {
+              "book_edition_id" : 3,
+              "edition_number" : 3,
+              "public_year" : 2022,
+              "page_count" : 340,
+              "language" : "vn",
+              "convert_image" : "cover3.jpg",
+              "publisher" : "Publisher 3",
+              "isbn" : "1234567890125",
+              "is_deleted" : false,
+              "create_date" : "2023-01-01",
+              "update_date" : "2023-06-01"
+            }
+          ]
+        },
+        "inner_hits" : {
+          "book_editions" : {
+            "hits" : {
+              "total" : {
+                "value" : 1,
+                "relation" : "eq"
+              },
+              "max_score" : 2.2335923,
+              "hits" : [
+                {
+                  "_index" : "books",
+                  "_type" : "_doc",
+                  "_id" : "1",
+                  "_nested" : {
+                    "field" : "book_editions",
+                    "offset" : 1
+                  },
+                  "_score" : 2.2335923,
+                  "_source" : {
+                    "public_year" : 2021,
+                    "is_deleted" : false,
+                    "book_edition_id" : 2,
+                    "isbn" : "1234567890124",
+                    "edition_number" : 2,
+                    "publisher" : "Publisher 2",
+                    "language" : "en",
+                    "create_date" : "2023-01-01",
+                    "page_count" : 320,
+                    "update_date" : "2023-06-01",
+                    "convert_image" : "cover2.jpg"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+
+```
+
+##### 5. Nested fields limitations 
+* Keep performance in mind when using *nested* fields; not for free 
+* An index can have up to 50 *nested* fields by default
+* A document can have up to 10,000 _nested_ objects by default 
+ 
+
 
 ## Image resources
 * [Complete Guide to Elasticsearch](https://tigeranalytics.udemy.com/course/elasticsearch-complete-guide/learn/lecture/18848504#overview)
