@@ -1579,6 +1579,749 @@ GET /books/_search
 * A document can have up to 10,000 _nested_ objects by default 
  
 
+## Joining Queries 
+
+### Mapping document relationships 
+```
+PUT /department
+{
+    "mappings": {
+        "properties": {
+            "join_field": {
+                "type": "join",
+                "relations": {
+                    "department": "employee"
+                }
+            }
+        }
+    }
+}
+```
+
+### Add documents & child documents
+
+```
+PUT /department/_doc/1
+{
+  "name": "Development",
+  "join_field": "department"
+}
+
+PUT /department/_doc/2
+{
+  "name": "Marketing",
+  "join_field": "department"
+}
+```
+
+```
+PUT /department/_doc/3?routing=1
+{
+  "name": "Nguyen Van A",
+  "age": 23,
+  "gender": "M",
+  "join_field": {
+    "name": "employee",
+    "parent": 1
+  }
+}
+
+PUT /department/_doc/4?routing=1
+{
+  "name": "Le Thi B",
+  "age": 28,
+  "gender": "F",
+  "join_field": {
+    "name": "employee",
+    "parent": 1
+  }
+}
+
+PUT /department/_doc/5?routing=1
+{
+  "name": "Dinh Van C",
+  "age": 32,
+  "gender": "M",
+  "join_field": {
+    "name": "employee",
+    "parent": 2
+  }
+}
+```
+
+### Query by Parent ID 
+```
+GET /department/_search
+{
+  "query": {
+    "parent_id": {
+      "type": "employee",
+      "id": 1
+    }
+  }
+}
+```
+
+#### Result 
+```
+{
+  "took" : 1,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 2,
+      "relation" : "eq"
+    },
+    "max_score" : 0.53899646,
+    "hits" : [
+      {
+        "_index" : "department",
+        "_type" : "_doc",
+        "_id" : "3",
+        "_score" : 0.53899646,
+        "_routing" : "1",
+        "_source" : {
+          "name" : "Nguyen Van A",
+          "age" : 23,
+          "gender" : "M",
+          "join_field" : {
+            "name" : "employee",
+            "parent" : 1
+          }
+        }
+      },
+      {
+        "_index" : "department",
+        "_type" : "_doc",
+        "_id" : "4",
+        "_score" : 0.53899646,
+        "_routing" : "1",
+        "_source" : {
+          "name" : "Le Thi B",
+          "age" : 28,
+          "gender" : "F",
+          "join_field" : {
+            "name" : "employee",
+            "parent" : 1
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### Query child documents by parent 
+```
+GET /department/_search 
+{
+  "query": {
+    "has_parent": {
+      "parent_type": "department", 
+      "query": {
+        "term": {
+          "name.keyword": "Development"
+        }
+      }
+    }
+  }
+}
+```
+
+### Query parent documents by child
+```
+GET /department/_search 
+{
+  "query": {
+    "has_child": {
+      "type": "employee",
+      "query": {
+        "term": {
+          "name.keyword": "Nguyen Van A"
+        }
+      }
+    }
+  }
+}
+```
+
+### Multi-level relations
+
+```
+            Company
+            /     \
+    Department    Supplier 
+        /
+    Employee 
+```
+
+#### Mapping objects 
+```
+PUT /company 
+{
+    "mappings": {
+        "properties": {
+            "name": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword"
+                    }
+                }
+            },
+            "join_field": {
+                "type": "join",
+                "relations": {
+                  "company": ["department", "supplier"],
+                  "department": "employee"
+                }
+            }
+        }
+    }
+}
+```
+
+#### Add documents 
+```
+PUT /company/_doc/1
+{
+  "name": "FPT Software",
+  "join_field": "company"
+}
+
+PUT /company/_doc/2?routing=1
+{
+  "name": "Development",
+  "join_field": {
+    "name": "department",
+    "parent": 1
+  }
+}
+
+PUT /company/_doc/3?routing=1
+{
+  "name": "Nguyen Van A",
+  "age": 21,
+  "gender": "M",
+  "join_field": {
+    "name": "employee",
+    "parent": 2
+  }
+}
+```
+
+#### Search query
+
+```
+GET /company/_search 
+{
+  "query": {
+    "has_child": {
+      "type": "department",
+      "query": {
+        "has_child": {
+          "type": "employee",
+          "query": {
+            "match": {
+              "name": "nguyen van a"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+##### Result 
+```
+{
+  "took" : 2,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 1,
+      "relation" : "eq"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "company",
+        "_type" : "_doc",
+        "_id" : "1",
+        "_score" : 1.0,
+        "_source" : {
+          "name" : "FPT Software",
+          "join_field" : "company"
+        }
+      }
+    ]
+  }
+}
+```
+
+## Controlling Query Results 
+
+### Source filtering
+```
+GET /books/_search 
+{
+  "_source": ["title", "book_editions.language", "book_editions.page_count", "authors.first_name", "authors.last_name"],
+  "query": {
+    "nested": {
+      "path": "book_editions",
+      "query": {
+        "bool": {
+          "filter": [
+            {
+              "range": {
+                "book_editions.page_count": {
+                  "gte": 340
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+```
+{
+  "took" : 1,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 3,
+      "relation" : "eq"
+    },
+    "max_score" : 0.0,
+    "hits" : [
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "1",
+        "_score" : 0.0,
+        "_source" : {
+          "title" : "Harry Potter",
+          "book_editions" : [
+            {
+              "language" : "vn",
+              "page_count" : 300
+            },
+            {
+              "language" : "en",
+              "page_count" : 320
+            },
+            {
+              "language" : "vn",
+              "page_count" : 340
+            }
+          ],
+          "authors" : [
+            {
+              "last_name" : "Rowling",
+              "first_name" : "J.K."
+            },
+            {
+              "last_name" : "Doe",
+              "first_name" : "John"
+            }
+          ]
+        }
+      },
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "5",
+        "_score" : 0.0,
+        "_source" : {
+          "title" : "Pride and Prejudice",
+          "book_editions" : [
+            {
+              "language" : "en",
+              "page_count" : 432
+            }
+          ],
+          "authors" : [
+            {
+              "last_name" : "Austen",
+              "first_name" : "Jane"
+            }
+          ]
+        }
+      },
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "6",
+        "_score" : 0.0,
+        "_source" : {
+          "title" : "Moby-Dick",
+          "book_editions" : [
+            {
+              "language" : "en",
+              "page_count" : 585
+            }
+          ],
+          "authors" : [
+            {
+              "last_name" : "Melville",
+              "first_name" : "Herman"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+
+```
+
+### Specifying the result size 
+```
+GET /books/_search 
+{
+  "_source": false, 
+  "size": 3,
+  "query": {
+    "match_all": {}
+  }
+}
+```
+```
+{
+  "took" : 1,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 6,
+      "relation" : "eq"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "1",
+        "_score" : 1.0
+      },
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "2",
+        "_score" : 1.0
+      },
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "3",
+        "_score" : 1.0
+      }
+    ]
+  }
+}
+```
+
+### Specifying the offset 
+```
+GET /books/_search 
+{
+  "_source": false, 
+  "size": 3,
+  "from": 3, #offset; current page No: 2
+  "query": {
+    "match_all": {}
+  }
+}
+```
+
+### Sorting results 
+```
+GET /books/_search 
+{
+  "_source": ["title", "book_editions.page_count"], 
+  "size": 3,
+  "from": 3,
+  "query": {
+    "match_all": {}
+  },
+  "sort": [
+      { "title.keyword":  "asc" },
+      { "book_editions.page_count": "desc" }
+  ]
+}
+
+```
+```
+{
+  "took" : 1,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 1,
+    "successful" : 1,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 6,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "5",
+        "_score" : null,
+        "_source" : {
+          "title" : "Pride and Prejudice",
+          "book_editions" : [
+            {
+              "page_count" : 432
+            }
+          ]
+        },
+        "sort" : [
+          "Pride and Prejudice",
+          -9223372036854775808
+        ]
+      },
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "2",
+        "_score" : null,
+        "_source" : {
+          "title" : "The Hobbit",
+          "book_editions" : [
+            {
+              "page_count" : 310
+            }
+          ]
+        },
+        "sort" : [
+          "The Hobbit",
+          -9223372036854775808
+        ]
+      },
+      {
+        "_index" : "books",
+        "_type" : "_doc",
+        "_id" : "3",
+        "_score" : null,
+        "_source" : {
+          "title" : "To Kill a Mockingbird",
+          "book_editions" : [
+            {
+              "page_count" : 281
+            }
+          ]
+        },
+        "sort" : [
+          "To Kill a Mockingbird",
+          -9223372036854775808
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Improve search result
+
+### Proximity searches 
+
+#### Documents 
+```
+[
+  {
+    "title": "Spicy Sauce"
+  },
+  {
+    "title": "Spicy Tomato Sauce"
+  },
+  {
+    "title": "Tomato Sauce (spicy)"
+  },
+  {
+    "title": "Spicy and very delicious Tomato Sauce"
+  }
+]
+```
+
+#### Match phrase searches 
+```
+GET /index_name/_search 
+{
+  "query": {
+    "match_phrase": {
+      "title": {
+        "query": "spicy sauce",
+        "slop": 1 
+      }
+    }
+  }
+}
+
+#slop: allow to search with in-order phrases with specific number of gap distance
+```
+
+#### Value without using _slop_
+```
+[
+  {
+    "title": "Spicy Sauce"
+  }
+]
+```
+
+#### Value with using _slop_
+```
+[
+  {
+    "title": "Spicy Sauce"
+  },
+  {
+    "title": "Spicy Tomato Sauce"
+  },
+  {
+    "title": "Tomato Sauce (spicy)"
+  }
+]
+```
+
+#### Affecting relevance score with proximity
+```
+GET /index_name/_search 
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "title": {
+              "query": "spicy sauce"
+            }
+          }
+        }
+      ],
+      "should": [
+        {
+          "match_phrase": {
+            "title": {
+              "query": "spicy sauce",
+              "slop": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+#### Result after boosting relevance score 
+```
+[
+  {
+    "title": "Spicy Sauce"
+  },
+  {
+    "title": "Spicy Tomato and Garlic Sauce"
+  },
+  {
+    "title": "Spicy Tomato Sauce"
+  },
+  {
+    "title": "Tomato Sauce (spicy)"
+  }
+]
+```
+
+### Fuzzy match query (handling typos)
+
+#### Example for improper typo
+```
+    "l0bster"     ------------->  "lobster" 
+    SEARCH QUERY   (Not match)   INVERTED INDEX
+
+    "l0bster"     ----> Fuzziness ----> "lobster" 
+    SEARCH QUERY         (Match)        INVERTED INDEX
+```
+
+#### Add parameter _fuzziness_
+```
+GET /index_name/_search 
+{
+  "query": {
+    "match": {
+      "name": {
+        "query": "l0bster",
+        "fuzziness": "auto"
+      }
+    }
+  }
+}
+```
+
+#### Automatic Fuzziness 
+| Term Length   | Maximum Edit Distance   |
+|:-------------:|:-----------------------:|
+| `1-2`         |     `0`                 |
+| `3-5`         |     `1`                 |
+| `> 5`         |     `2`                 |
+
+_Maximum Edit Distance: 2_
+
+#### Transpositions 
+```
+AB -> BA 
+LVIE -> LIVE
+LBOSTER -> LOBSTER
+```
+##### Default is true, but how to disable it?
+```
+GET /index_name/_search
+{
+  "query": {
+    "match": {
+      "name": {
+        "query": "lvie",
+        "fuzziness": 1,
+        "fuzy_transpositions": false
+      }
+    }
+  }
+}
+```
+
+### Add synonyms 
 
 ## Image resources
 * [Complete Guide to Elasticsearch](https://tigeranalytics.udemy.com/course/elasticsearch-complete-guide/learn/lecture/18848504#overview)
