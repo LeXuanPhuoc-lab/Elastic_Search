@@ -1,5 +1,12 @@
-# Elastic Search
+# <img src="https://static-00.iconduck.com/assets.00/elasticsearch-icon-1839x2048-g9zblqim.png" width="32" align="top"> Elasticsearch
 
+## How to set up Elastic
+
+* [📖 Install Elasticsearch Guide](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html)
+
+* <img src="https://cdn-icons-png.flaticon.com/512/919/919853.png" width="19" align="top"> [Install Elasticsearch with Docker](https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html)
+
+* Build up `docker-compose.yml`
 
 ## Two type of queries in Elastic  
 
@@ -2321,11 +2328,17 @@ GET /index_name/_search
 }
 ```
 
-### Add synonyms 
+## Resources
 
-## Image resources
+### Image Resources
 * [Complete Guide to Elasticsearch](https://tigeranalytics.udemy.com/course/elasticsearch-complete-guide/learn/lecture/18848504#overview)
 
-## Other references about Elasticsearch
-* [Elasticsearch là gì ?](https://viblo.asia/p/elasticsearch-la-gi-1Je5E8RmlnL)
+### Other References on Elasticsearch
+* [Elasticsearch là gì?](https://viblo.asia/p/elasticsearch-la-gi-1Je5E8RmlnL)
 * [Elasticsearch: Distributed Search](https://viblo.asia/p/elasticsearch-distributed-search-ZnbRlr6lG2Xo#replica-shard-6)
+
+---
+
+<div align="center" style="font-size: 0.9em; color: #666;">
+   💡 For more information on Elasticsearch, visit the official documentation and explore the additional resources provided above.
+</div>

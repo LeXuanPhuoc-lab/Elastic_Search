@@ -1,0 +1,44 @@
+version: '3.4'
+services:
+  elasticsearch:
+        container_name: els
+        image: elasticsearch:7.17.0
+        environment:
+            - xpack.security.enabled=false
+            - discovery.type=single-node
+            - "ES_JAVA_OPTS=-Xms1g -Xmx1g"  # Limit heap size to 1GB
+            - bootstrap.memory_lock=true  # Prevent Elasticsearch from being swapped
+        ports:
+            - 9200:9200
+        volumes:
+            - elasticsearch-data:/usr/share/elasticsearch/data
+        networks:
+            - es-net 
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1
+        # deploy:
+        # resources:
+        #     limits:
+        #         memory: 2g  # Limit container memory to 2GB
+        #     reservations:
+        #         memory: 1g  # Reserve 1GB of memory
+  kibana:
+        container_name: kibana
+        image: kibana:7.17.0
+        environment:
+            - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+        depends_on:
+            - elasticsearch
+        ports:
+            - 5601:5601   
+        networks:
+            - es-net 
+networks:
+    es-net:
+        # driver: bridge
+volumes:
+    pgdata:
+    # mongodata:
+    elasticsearch-data:
